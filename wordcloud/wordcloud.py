@@ -538,18 +538,34 @@ class WordCloud(object):
         self.generate_from_frequencies(words)
         return self
 
-    def generate(self, text):
+    def generate(self, text , src=None):
         """Generate wordcloud from text.
 
-        Alias to generate_from_text.
+        generate_from_text if src is None
+            Calls process_text and generate_from_frequencies.
+        o.w
+            Read from json and get an dictory of
 
-        Calls process_text and generate_from_frequencies.
-
+            {
+                'word1' : num 1,
+                'word2' : num 2
+            }
         Returns
         -------
         self
         """
-        return self.generate_from_text(text)
+        import json
+        if src == None :
+            return self.generate_from_text(text)
+        else:
+            if type(src) == str :
+                assert src.endswith('.json')
+                w2n = json.load(src)
+            else:
+                assert type(src) == dict
+                w2n = src
+
+            return self.generate_from_frequencies(w2n)
 
     def _check_generated(self):
         """Check if ``layout_`` was computed, otherwise raise error."""

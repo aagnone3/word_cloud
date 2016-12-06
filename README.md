@@ -11,6 +11,11 @@ A little word cloud generator in Python. Read more about it on the [blog
 post][blog-post] or the [website][website].
 The code is Python 2, but Python 3 compatible.
 
+Features added in this fork : 
+
+	1. generate word cloud plot based on frequency to any metric, like based on word similarity toward one  target word
+	
+
 ## Installation
 
 Fast install:

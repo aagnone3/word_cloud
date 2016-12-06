@@ -230,3 +230,22 @@ def test_generate_from_frequencies():
     result = wc.generate_from_frequencies(words)
 
     assert_true(isinstance(result, WordCloud))
+
+
+def test_generate_from_dict():
+
+    src = {
+        'w1' : 100,
+        'w2' : 200,
+        'w3' : 10,
+    }
+
+    wc = WordCloud(max_words=50).generate_from_frequencies(src)
+
+    import matplotlib.pylab as plt
+    print(wc)
+    plt.imshow(wc)
+    plt.savefig('example.jpg', bbox_inches='tight')
+    assert_true(isinstance(wc, WordCloud))
+
+#test_generate_from_dict()
