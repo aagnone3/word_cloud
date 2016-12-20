@@ -31,6 +31,8 @@ FONT_PATH = os.environ.get("FONT_PATH", os.path.join(os.path.dirname(__file__),
 STOPWORDS = set([x.strip() for x in open(
     os.path.join(os.path.dirname(__file__), 'stopwords')).read().split('\n')])
 
+import random
+
 
 class IntegralOccupancyMap(object):
     def __init__(self, height, width, mask):
@@ -43,9 +45,18 @@ class IntegralOccupancyMap(object):
         else:
             self.integral = np.zeros((height, width), dtype=np.uint32)
 
+
     def sample_position(self, size_x, size_y, random_state):
-        return query_integral_image(self.integral, size_x, size_y,
+        r =  query_integral_image(self.integral, size_x, size_y,
                                     random_state)
+        if r is not None:
+            return (r[0], r[1])
+        return r
+
+    #@new_added
+    def fixed_position(self, factor):
+        r = (0, self.height * factor)
+        return r
 
     def update(self, img_array, pos_x, pos_y):
         partial_integral = np.cumsum(np.cumsum(img_array[pos_x:, pos_y:],
@@ -80,9 +91,7 @@ def random_color_func(word=None, font_size=None, position=None,
         numbers.
 
     """
-    if random_state is None:
-        random_state = Random()
-    return "hsl(%d, 80%%, 50%%)" % random_state.randint(0, 255)
+    return "hsl(%d, 80%%, 50%%)" % random.randint(0, 255)
 
 
 class colormap_color_func(object):
@@ -101,12 +110,13 @@ class colormap_color_func(object):
     def __init__(self, colormap):
         import matplotlib.pyplot as plt
         self.colormap = plt.cm.get_cmap(colormap)
+        random.seed(501)
 
     def __call__(self, word, font_size, position, orientation,
                  random_state=None, **kwargs):
-        if random_state is None:
-            random_state = Random()
-        r, g, b, _ = 255 * np.array(self.colormap(random_state.uniform(0, 1)))
+        # if random_state is None:
+        #     random_state = Random()
+        r, g, b, _ = 255 * np.array(self.colormap(random.uniform(0, 1)))
         return "rgb({:.0f}, {:.0f}, {:.0f})".format(r, g, b)
 
 
@@ -139,9 +149,8 @@ def get_single_color_func(color):
           numbers.
 
         """
-        if random_state is None:
-            random_state = Random()
-        r, g, b = colorsys.hsv_to_rgb(h, s, random_state.uniform(0.2, 1))
+
+        r, g, b = colorsys.hsv_to_rgb(h, s, random.uniform(0.2, 1))
         return 'rgb({:.0f}, {:.0f}, {:.0f})'.format(r * rgb_max, g * rgb_max,
                                                     b * rgb_max)
     return single_color_func
@@ -267,7 +276,7 @@ class WordCloud(object):
                  ranks_only=None, prefer_horizontal=.9, mask=None, scale=1,
                  color_func=None, max_words=200, min_font_size=4,
                  stopwords=None, random_state=None, background_color='black',
-                 max_font_size=None, font_step=1, mode="RGB",
+                 max_font_size=20, font_step=1, mode="RGB",
                  relative_scaling=.5, regexp=None, collocations=True,
                  colormap=None, normalize_plurals=True):
         if font_path is None:
@@ -310,6 +319,7 @@ class WordCloud(object):
                           " it had no effect. Look into relative_scaling.",
                           DeprecationWarning)
         self.normalize_plurals = normalize_plurals
+        self.count = 0
 
     def fit_words(self, frequencies):
         """Create a word_cloud from words and frequencies.
@@ -344,41 +354,42 @@ class WordCloud(object):
 
         """
         # make sure frequencies are sorted and normalized
-        frequencies = sorted(frequencies.items(), key=item1, reverse=True)
+        #frequencies = sorted(frequencies.items(), key=item1, reverse=True)
+        # do not need to sort the frequency, such taht the color for each word would be the same
+
+        frequencies = zip(frequencies.keys(), frequencies.values())
         frequencies = frequencies[:self.max_words]
         # largest entry will be 1
-        max_frequency = float(frequencies[0][1])
-
-        frequencies = [(word, freq / max_frequency)
+        #max_frequency = float(frequencies[0][1])
+        frequencies = [(word, freq )
                        for word, freq in frequencies]
-
         if self.random_state is not None:
             random_state = self.random_state
         else:
-            random_state = Random()
+            random_state = Random(1)
 
         if len(frequencies) <= 0:
             print("We need at least 1 word to plot a word cloud, got %d."
                   % len(frequencies))
 
-        if self.mask is not None:
-            mask = self.mask
-            width = mask.shape[1]
-            height = mask.shape[0]
-            if mask.dtype.kind == 'f':
-                warnings.warn("mask image should be unsigned byte between 0"
-                              " and 255. Got a float array")
-            if mask.ndim == 2:
-                boolean_mask = mask == 255
-            elif mask.ndim == 3:
-                # if all channels are white, mask out
-                boolean_mask = np.all(mask[:, :, :3] == 255, axis=-1)
-            else:
-                raise ValueError("Got mask of invalid shape: %s"
-                                 % str(mask.shape))
-        else:
-            boolean_mask = None
-            height, width = self.height, self.width
+        # if self.mask is not None:
+        #     mask = self.mask
+        #     width = mask.shape[1]
+        #     height = mask.shape[0]
+        #     if mask.dtype.kind == 'f':
+        #         warnings.warn("mask image should be unsigned byte between 0"
+        #                       " and 255. Got a float array")
+        #     if mask.ndim == 2:
+        #         boolean_mask = mask == 255
+        #     elif mask.ndim == 3:
+        #         # if all channels are white, mask out
+        #         boolean_mask = np.all(mask[:, :, :3] == 255, axis=-1)
+        #     else:
+        #         raise ValueError("Got mask of invalid shape: %s"
+        #                          % str(mask.shape))
+        # else:
+        boolean_mask = None
+        height, width = self.height, self.width
         occupancy = IntegralOccupancyMap(height, width, boolean_mask)
 
         # create image
@@ -413,16 +424,13 @@ class WordCloud(object):
         self.words_ = dict(frequencies)
 
         # start drawing grey image
-        for word, freq in frequencies:
+        for i, (word, freq) in enumerate(frequencies):
             # select the font size
             rs = self.relative_scaling
             if rs != 0:
                 font_size = int(round((rs * (freq / float(last_freq))
                                        + (1 - rs)) * font_size))
-            if random_state.random() < self.prefer_horizontal:
-                orientation = None
-            else:
-                orientation = Image.ROTATE_90
+            orientation = None
             tried_other_orientation = False
             while True:
                 # try to find a position
@@ -434,24 +442,24 @@ class WordCloud(object):
                 box_size = draw.textsize(word, font=transposed_font)
                 # find possible places using integral image:
                 result = occupancy.sample_position(box_size[1] + self.margin,
-                                                   box_size[0] + self.margin,
-                                                   random_state)
+                                                 box_size[0] + self.margin,
+                                                 random_state)
+                #result = occupancy.fixed_position(0.9)
                 if result is not None or font_size < self.min_font_size:
                     # either we found a place or font-size went too small
                     break
                 # if we didn't find a place, make font smaller
-                if tried_other_orientation is False:
-                    orientation = (Image.ROTATE_90 if orientation is None else
-                                   Image.ROTATE_90)
-                    tried_other_orientation = True
-                else:
-                    font_size -= self.font_step
-                    orientation = None
+                # if tried_other_orientation is False:
+                #     orientation = (Image.ROTATE_90 if orientation is None else
+                #                    Image.ROTATE_90)
+                #     tried_other_orientation = True
+                # else:
+                font_size -= self.font_step
+                #orientation = None
 
             if font_size < self.min_font_size:
                 # we were unable to draw any more
                 break
-
             x, y = np.array(result) + self.margin // 2
             # actually draw the text
             draw.text((y, x), word, fill="white", font=transposed_font)
@@ -544,8 +552,7 @@ class WordCloud(object):
         generate_from_text if src is None
             Calls process_text and generate_from_frequencies.
         o.w
-            Read from json and get an dictory of
-
+            Read from json and get an dictionary of
             {
                 'word1' : num 1,
                 'word2' : num 2
@@ -564,7 +571,6 @@ class WordCloud(object):
             else:
                 assert type(src) == dict
                 w2n = src
-
             return self.generate_from_frequencies(w2n)
 
     def _check_generated(self):
